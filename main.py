@@ -30,6 +30,28 @@ def generate_instance(size, seed):
     return cost_matrix
 
 
+def assigned_costs(cost_matrix, assignment):
+    return cost_matrix[np.arange(len(assignment)), assignment]
+
+
+def total_cost(cost_matrix, assignment):
+    return float(assigned_costs(cost_matrix, assignment).sum())
+
+
+def swap_cost_change(cost_matrix, assignment, worker_a, worker_b):
+    # skatāmies tikai uz divām mainītajām rindām, nevis pārrēķinām visu
+
+    job_a, job_b = assignment[worker_a], assignment[worker_b]
+    cost_after = cost_matrix[worker_a, job_b] + cost_matrix[worker_b, job_a]
+    cost_before = cost_matrix[worker_a, job_a] + cost_matrix[worker_b, job_b]
+    return cost_after - cost_before
+
+
+def is_valid_assignment(cost_matrix, assignment):
+    is_permutation = sorted(assignment) == list(range(len(assignment)))
+    return is_permutation and bool((assigned_costs(cost_matrix, assignment) < FORBIDDEN_COST).all())
+
+
 def run_benchmark():
     pass
 
