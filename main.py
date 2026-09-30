@@ -4,10 +4,16 @@
 # Izmaksu funkcija - summa cost_matrix[i][assignment[i]] pa visiem darbiniekiem.
 # Apkārtne - divu darbinieku darbu samainīšana.
 
+import math
+import random
 import numpy as np
 
 FORBIDDEN_COST = 10_000.0  # darbinieks šo darbu nevar veikt
 FORBIDDEN_RATIO = 0.15  # cik liela daļa no pāriem (darbinieks, darbs) ir aizliegti
+
+COOLING_RATE = 0.98  # alfa, T = T * alfa
+MIN_TEMPERATURE = 1e-8  # apstājamies, kad T < MIN_TEMPERATURE (izvēlētā vērtība no izvēlētās literatūras piemēra)
+ITERATIONS_PER_SIZE = 50  # kaimiņu skaits pie katras temperatūras = 50 * N
 
 
 def generate_instance(size, seed):
@@ -50,6 +56,52 @@ def swap_cost_change(cost_matrix, assignment, worker_a, worker_b):
 def is_valid_assignment(cost_matrix, assignment):
     is_permutation = sorted(assignment) == list(range(len(assignment)))
     return is_permutation and bool((assigned_costs(cost_matrix, assignment) < FORBIDDEN_COST).all())
+
+
+def simulated_annealing(cost_matrix, seed):
+    # Sākam ar augstu temperatūru un nejaušu risinājumu. Katrā solī paņemam kaimiņu
+    # (samainām divu darbinieku darbus).
+    # Labāku kaimiņu pieņemam vienmēr, sliktāku - ar varbūtību e^(-delta/T) (Lai tiktu laukā no lokālā minimuma).
+    # Temperatūrai krītot, sliktākus gājienus pieņemam arvien retāk, un meklēšana nostabilizējas.
+
+    rng = random.Random(seed)
+    size = len(cost_matrix)
+    # cik kaimiņus apskatām pie katras temperatūras
+    iterations_per_temp = ITERATIONS_PER_SIZE * size
+
+    # sākuma temperatūra - izmaksu standartnovirze, lai sākumā e^(-delta/T)
+    # būtu pietiekami liels un algoritms varētu brīvi pētīt risinājumu telpu
+    temperature = float(cost_matrix[cost_matrix < FORBIDDEN_COST].std())
+
+    # sākuma risinājums - nejauša permutācija
+    assignment = list(range(size))
+    rng.shuffle(assignment)
+    current_cost = total_cost(cost_matrix, assignment)
+    # atceramies labāko atrasto, jo pašreizējais var arī pasliktināties
+    best_assignment, best_cost = assignment[:], current_cost
+
+    # apstāšanās kritērijs - kad temperatūra kļuvusi pietiekami zema
+    while temperature > MIN_TEMPERATURE:
+        for _ in range(iterations_per_temp):
+            # kaimiņš: izvēlamies divus darbiniekus, kuriem samainīt darbus
+            worker_a, worker_b = rng.sample(range(size), 2)
+            cost_change = swap_cost_change(cost_matrix, assignment, worker_a, worker_b)
+
+            # labāku pieņemam vienmēr, sliktāku ar varbūtību P = e^(-delta/T)
+            # (jo augstāka T un mazāka pasliktināšanās, jo lielāka P)
+            accept = cost_change < 0 or rng.random() < math.exp(-cost_change / temperature)
+            if not accept:
+                continue
+
+            assignment[worker_a], assignment[worker_b] = assignment[worker_b], assignment[worker_a]
+            current_cost += cost_change
+            if current_cost < best_cost:
+                best_assignment, best_cost = assignment[:], current_cost
+
+        # atdzesēšana: T = T * alfa
+        temperature *= COOLING_RATE
+
+    return best_assignment, best_cost
 
 
 def run_benchmark():
