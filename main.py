@@ -6,7 +6,10 @@
 
 import math
 import random
+import time
+from statistics import mean
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 FORBIDDEN_COST = 10_000.0  # darbinieks šo darbu nevar veikt
 FORBIDDEN_RATIO = 0.15  # cik liela daļa no pāriem (darbinieks, darbs) ir aizliegti
@@ -14,6 +17,9 @@ FORBIDDEN_RATIO = 0.15  # cik liela daļa no pāriem (darbinieks, darbs) ir aizl
 COOLING_RATE = 0.98  # alfa, T = T * alfa
 MIN_TEMPERATURE = 1e-8  # apstājamies, kad T < MIN_TEMPERATURE (izvēlētā vērtība no izvēlētās literatūras piemēra)
 ITERATIONS_PER_SIZE = 50  # kaimiņu skaits pie katras temperatūras = 50 * N
+
+BENCHMARK_SIZES = (10, 20, 50, 100)
+BENCHMARK_RUNS = 5  # cik reizes palaižam SA katram izmēram
 
 
 def generate_instance(size, seed):
@@ -104,8 +110,33 @@ def simulated_annealing(cost_matrix, seed):
     return best_assignment, best_cost
 
 
+def optimal_cost_reference(cost_matrix):
+    workers, jobs = linear_sum_assignment(cost_matrix)
+    return float(cost_matrix[workers, jobs].sum())
+
+
 def run_benchmark():
-    pass
+    print(f"{'N':>5} {'optimums':>11} {'SA vid.':>11} {'SA labākais':>12} {'novirze %':>10} {'trāpīja opt.':>13} {'laiks (s)':>10}")
+
+    for size in BENCHMARK_SIZES:
+        cost_matrix = generate_instance(size, seed=size)
+        optimal_cost = optimal_cost_reference(cost_matrix)
+
+        run_costs, run_durations = [], []
+        for run_index in range(BENCHMARK_RUNS):
+            start_time = time.perf_counter()
+            assignment, found_cost = simulated_annealing(cost_matrix, seed=run_index)
+            run_durations.append(time.perf_counter() - start_time)
+
+            assert is_valid_assignment(cost_matrix, assignment), "Nederīgs risinājums!"
+            run_costs.append(found_cost)
+
+        average_cost = mean(run_costs)
+        gap_percent = 100 * (average_cost - optimal_cost) / optimal_cost
+        optimal_hits = sum(math.isclose(cost, optimal_cost, abs_tol=1e-6) for cost in run_costs)
+
+        print(f"{size:>5} {optimal_cost:>11.2f} {average_cost:>11.2f} {min(run_costs):>12.2f} "
+              f"{gap_percent:>10.2f} {optimal_hits:>8}/{BENCHMARK_RUNS:<4} {mean(run_durations):>10.2f}")
 
 
 if __name__ == "__main__":
