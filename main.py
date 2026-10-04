@@ -4,6 +4,13 @@
 # Izmaksu funkcija - summa cost_matrix[i][assignment[i]] pa visiem darbiniekiem.
 # Apkārtne - divu darbinieku darbu samainīšana.
 
+# scipy linear_sum_assignment izmanto tikai, lai salīdzinātu ar optimālo atbildi.
+
+# Izmantotā literatūra:
+# https://www.geeksforgeeks.org/artificial-intelligence/what-is-simulated-annealing/
+
+# Matīss Aizgalis, ma26049
+
 import math
 import random
 import time
