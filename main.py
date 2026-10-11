@@ -14,6 +14,7 @@
 import math
 import random
 import time
+from pathlib import Path
 from statistics import mean
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -28,6 +29,7 @@ ITERATIONS_PER_SIZE = 50  # kaimiņu skaits pie katras temperatūras = 50 * N
 BENCHMARK_SIZES = (10, 20, 50, 100)
 BENCHMARK_RUNS = 5  # cik reizes palaižam SA katram izmēram
 
+INSTANCES_DIR = Path(__file__).parent / "instances"
 
 def generate_instance(size, seed):
     # Izmaksas = stundas likme * darba laiks + sods par nepietiekamu kvalifikāciju.
@@ -48,14 +50,11 @@ def generate_instance(size, seed):
     cost_matrix[is_forbidden] = FORBIDDEN_COST
     return cost_matrix
 
-
 def assigned_costs(cost_matrix, assignment):
     return cost_matrix[np.arange(len(assignment)), assignment]
 
-
 def total_cost(cost_matrix, assignment):
     return float(assigned_costs(cost_matrix, assignment).sum())
-
 
 def swap_cost_change(cost_matrix, assignment, worker_a, worker_b):
     # skatāmies tikai uz divām mainītajām rindām, nevis pārrēķinām visu
@@ -65,11 +64,9 @@ def swap_cost_change(cost_matrix, assignment, worker_a, worker_b):
     cost_before = cost_matrix[worker_a, job_a] + cost_matrix[worker_b, job_b]
     return cost_after - cost_before
 
-
 def is_valid_assignment(cost_matrix, assignment):
     is_permutation = sorted(assignment) == list(range(len(assignment)))
     return is_permutation and bool((assigned_costs(cost_matrix, assignment) < FORBIDDEN_COST).all())
-
 
 def simulated_annealing(cost_matrix, seed):
     # Sākam ar augstu temperatūru un nejaušu risinājumu. Katrā solī paņemam kaimiņu
@@ -116,17 +113,24 @@ def simulated_annealing(cost_matrix, seed):
 
     return best_assignment, best_cost
 
-
 def optimal_cost_reference(cost_matrix):
     workers, jobs = linear_sum_assignment(cost_matrix)
     return float(cost_matrix[workers, jobs].sum())
 
+def load_instance(size):
+    # testēšanas piemēri glabājas instances/inst_N.csv
+    # tiek uzģenerēti un saglabāti faili
+    path = INSTANCES_DIR / f"inst_{size}.csv"
+    if not path.exists():
+        INSTANCES_DIR.mkdir(exist_ok=True)
+        np.savetxt(path, generate_instance(size, seed=size), delimiter=",", fmt="%.2f")
+    return np.loadtxt(path, delimiter=",")
 
 def run_benchmark():
     print(f"{'N':>5} {'optimums':>11} {'SA vid.':>11} {'SA labākais':>12} {'novirze %':>10} {'trāpīja opt.':>13} {'laiks (s)':>10}")
 
     for size in BENCHMARK_SIZES:
-        cost_matrix = generate_instance(size, seed=size)
+        cost_matrix = load_instance(size)
         optimal_cost = optimal_cost_reference(cost_matrix)
 
         run_costs, run_durations = [], []
@@ -139,12 +143,12 @@ def run_benchmark():
             run_costs.append(found_cost)
 
         average_cost = mean(run_costs)
-        gap_percent = 100 * (average_cost - optimal_cost) / optimal_cost
+        # max ar 0, lai noapaļošanas kļūdas dēļ neparādās -0.00
+        gap_percent = max(100 * (average_cost - optimal_cost) / optimal_cost, 0.0)
         optimal_hits = sum(math.isclose(cost, optimal_cost, abs_tol=1e-6) for cost in run_costs)
 
         print(f"{size:>5} {optimal_cost:>11.2f} {average_cost:>11.2f} {min(run_costs):>12.2f} "
               f"{gap_percent:>10.2f} {optimal_hits:>8}/{BENCHMARK_RUNS:<4} {mean(run_durations):>10.2f}")
-
 
 if __name__ == "__main__":
     run_benchmark()
